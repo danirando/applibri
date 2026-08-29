@@ -80,6 +80,10 @@ class RssNewsService
                 }
 
                 // Handle standard RSS 2.0 (<channel><item>) or Atom/RSS root items
+                // Register media namespace for feeds like The Guardian that use media:content
+                $namespaces = $xml->getNamespaces(true);
+                $mediaNamespace = $namespaces['media'] ?? null;
+
                 $items = $xml->channel->item ?? $xml->item ?? [];
 
                 foreach ($items as $item) {
@@ -94,10 +98,32 @@ class RssNewsService
                     $cleanDescription = trim(html_entity_decode(strip_tags($rawDescription)));
                     $excerpt = $cleanDescription !== '' ? Str::limit($cleanDescription, 300) : null;
 
-                    // Extract image from enclosure if available
+                    // Extract image: try <enclosure> first, then media:content namespace
                     $imageUrl = null;
                     if (isset($item->enclosure['url'])) {
                         $imageUrl = (string) $item->enclosure['url'];
+                    }
+
+                    if (! $imageUrl && $mediaNamespace) {
+                        $mediaChildren = $item->children($mediaNamespace);
+                        $bestUrl = null;
+                        $bestWidth = 0;
+
+                        foreach ($mediaChildren as $mediaTag => $mediaElement) {
+                            if ($mediaTag !== 'content') {
+                                continue;
+                            }
+                            $attrs = $mediaElement->attributes();
+                            $candidateUrl = isset($attrs['url']) ? (string) $attrs['url'] : null;
+                            $candidateWidth = isset($attrs['width']) ? (int) $attrs['width'] : 0;
+
+                            if ($candidateUrl && $candidateWidth > $bestWidth) {
+                                $bestUrl = $candidateUrl;
+                                $bestWidth = $candidateWidth;
+                            }
+                        }
+
+                        $imageUrl = $bestUrl;
                     }
 
                     // Parse publication date
