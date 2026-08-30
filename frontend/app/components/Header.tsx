@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useNavigation } from "react-router";
 
 export function Header() {
   const [showSearch, setShowSearch] = useState(false);
   const navigate = useNavigate();
+  const navigation = useNavigation();
+
+  const isSearching =
+    navigation.state === "loading" &&
+    navigation.location?.pathname === "/search";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,9 +39,14 @@ export function Header() {
           />
           <button
             type="submit"
-            className="bg-gray-800 text-white rounded-r-full px-4 text-sm"
+            disabled={isSearching}
+            className="bg-gray-800 text-white rounded-r-full px-4 text-sm disabled:opacity-60 flex items-center justify-center min-w-[60px]"
           >
-            Cerca
+            {isSearching ? (
+              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              "Cerca"
+            )}
           </button>
         </form>
 
@@ -74,9 +84,14 @@ export function Header() {
           />
           <button
             type="submit"
-            className="bg-gray-800 text-white rounded-r-full px-4 text-sm"
+            disabled={isSearching}
+            className="bg-gray-800 text-white rounded-r-full px-4 text-sm disabled:opacity-60 flex items-center justify-center min-w-[60px]"
           >
-            Cerca
+            {isSearching ? (
+              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              "Cerca"
+            )}
           </button>
         </form>
       )}

@@ -31,43 +31,49 @@ class BookController extends Controller
         $localBooks = Book::with(['authors', 'genres'])
             ->where(function ($q) use ($query) {
                 $q->where('title', 'like', "%{$query}%")
-                    ->orWhere('subtitle', 'like', "%{$query}%");
+                    ->orWhere('subtitle', 'like', "%{$query}%")
+                    ->orWhereHas('authors', function ($authorQuery) use ($query) {
+                        $authorQuery->where('name', 'like', "%{$query}%");
+                    });
             })
             ->paginate(15);
 
         $externalResults = [];
 
         // If fewer than 5 results exist locally, search Open Library
-        if ($localBooks->total() < 5) {
-            $openLibraryResults = $openLibraryService->search($query);
+        $openLibraryResults = $openLibraryService->search($query);
 
-            if (! empty($openLibraryResults)) {
-                $keys = array_filter(array_column($openLibraryResults, 'open_library_key'));
-                $existingKeys = Book::whereIn('external_id', $keys)->pluck('external_id')->toArray();
+        if (! empty($openLibraryResults)) {
+            $keys = array_filter(array_column($openLibraryResults, 'open_library_key'));
+            $existingKeys = Book::whereIn('external_id', $keys)->pluck('external_id')->toArray();
 
-                foreach ($openLibraryResults as $result) {
-                    $key = $result['open_library_key'] ?? null;
-                    $isAlreadyInDb = $key && in_array($key, $existingKeys, true);
+            foreach ($openLibraryResults as $result) {
+                $key = $result['open_library_key'] ?? null;
+                $isAlreadyInDb = $key && in_array($key, $existingKeys, true);
 
-                    // Dispatch async import job for new books
-                    if ($key && ! $isAlreadyInDb) {
-                        ImportBookFromOpenLibrary::dispatch(
-                            $key,
-                            $result['title'],
-                            $result['author_names'],
-                            $result['cover_id'],
-                            $result['isbn']
-                        );
-                    }
-
-                    $externalResults[] = [
-                        'title' => $result['title'],
-                        'author_names' => $result['author_names'],
-                        'cover_url' => $result['cover_url'],
-                        'open_library_key' => $key,
-                        'importing' => ! $isAlreadyInDb,
-                    ];
+                // Already imported (and already shown among local results): skip entirely,
+                // don't duplicate it and don't re-dispatch the import job.
+                if ($isAlreadyInDb) {
+                    continue;
                 }
+
+                if ($key) {
+                    ImportBookFromOpenLibrary::dispatch(
+                        $key,
+                        $result['title'],
+                        $result['author_names'],
+                        $result['cover_id'],
+                        $result['isbn']
+                    );
+                }
+
+                $externalResults[] = [
+                    'title' => $result['title'],
+                    'author_names' => $result['author_names'],
+                    'cover_url' => $result['cover_url'],
+                    'open_library_key' => $key,
+                    'importing' => true,
+                ];
             }
         }
 

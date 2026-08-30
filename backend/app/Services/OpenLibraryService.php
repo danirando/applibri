@@ -109,13 +109,18 @@ class OpenLibraryService
             $data = $response->json();
 
             // Description can be a string or an object with 'value' key
-            $rawDescription = $data['description'] ?? null;
-            $description = null;
-            if (is_string($rawDescription)) {
-                $description = $rawDescription;
-            } elseif (is_array($rawDescription) && isset($rawDescription['value'])) {
-                $description = (string) $rawDescription['value'];
-            }
+        // Description can be a string or an object with 'value' key
+$rawDescription = $data['description'] ?? null;
+$description = null;
+if (is_string($rawDescription)) {
+    $description = $rawDescription;
+} elseif (is_array($rawDescription) && isset($rawDescription['value'])) {
+    $description = (string) $rawDescription['value'];
+}
+
+if ($description !== null) {
+    $description = $this->cleanDescription($description);
+}
 
             $subjects = $data['subjects'] ?? [];
 
@@ -130,8 +135,36 @@ class OpenLibraryService
             ]);
 
             return null;
-        }
-    }
+        } }
+
+        /**
+ * Clean up Open Library description markdown noise (source links, "see also" sections).
+ */
+private function cleanDescription(string $text): string
+{
+    // Cut everything after a "---" separator (OL appends "see also"/edition links there)
+    $text = preg_split('/\n\s*-{3,}\s*\n/', $text)[0];
+
+    // Remove parenthetical citations that wrap a markdown link, e.g. "(source)" or "([source](url))"
+    $text = preg_replace('/\(\s*\[[^\]]+\]\([^)]+\)\s*\)/', '', $text);
+
+    // Convert any remaining markdown links [label](url) to just the label text
+    $text = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $text);
+
+    // Remove leftover bare markdown reference links like [1]: http://...
+    $text = preg_replace('/^\s*\[\d+\]:\s*\S+\s*$/m', '', $text);
+
+    // Strip markdown bold/italic markers, keep the text inside
+    $text = preg_replace('/\*\*(.+?)\*\*/', '$1', $text);
+    $text = preg_replace('/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/', '$1', $text);
+
+    // Collapse extra blank lines/spaces left behind by the removals above
+    $text = preg_replace('/[ \t]+/', ' ', $text);
+    $text = preg_replace('/\n{3,}/', "\n\n", $text);
+
+    return trim($text);
+}
+    
 
     /**
      * Get the earliest publication date from editions.
