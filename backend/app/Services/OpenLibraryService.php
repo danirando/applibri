@@ -73,6 +73,58 @@ class OpenLibraryService
     }
 
     /**
+     * Get popular books for an Open Library subject.
+     *
+     * @return array<int, array{
+     *     title: string,
+     *     author_names: array<string>,
+     *     cover_id: int|null,
+     *     open_library_key: string|null,
+     *     first_publish_year: int|null
+     * }>
+     */
+    public function getPopularBooks(string $subject = 'fiction', int $limit = 20): array
+    {
+        try {
+            $response = Http::timeout(8)->get("{$this->baseUrl}/subjects/{$subject}.json", [
+                'sort' => 'rating',
+                'limit' => $limit,
+            ]);
+
+            if ($response->failed()) {
+                Log::warning('OpenLibrary popular books request failed', [
+                    'subject' => $subject,
+                    'limit' => $limit,
+                    'status' => $response->status(),
+                ]);
+
+                return [];
+            }
+
+            return array_map(function (array $work): array {
+                return [
+                    'title' => $work['title'] ?? '',
+                    'author_names' => array_values(array_filter(array_map(
+                        fn (array $author): ?string => isset($author['name']) ? (string) $author['name'] : null,
+                        is_array($work['authors'] ?? null) ? $work['authors'] : []
+                    ))),
+                    'cover_id' => isset($work['cover_id']) ? (int) $work['cover_id'] : null,
+                    'open_library_key' => $work['key'] ?? null,
+                    'first_publish_year' => isset($work['first_publish_year']) ? (int) $work['first_publish_year'] : null,
+                ];
+            }, $response->json('works', []));
+        } catch (Throwable $e) {
+            Log::warning('OpenLibrary popular books exception', [
+                'subject' => $subject,
+                'limit' => $limit,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    /**
      * Build cover image URL from cover ID.
      */
     public function getCoverUrl(?int $coverId, string $size = 'M'): ?string
@@ -109,18 +161,18 @@ class OpenLibraryService
             $data = $response->json();
 
             // Description can be a string or an object with 'value' key
-        // Description can be a string or an object with 'value' key
-$rawDescription = $data['description'] ?? null;
-$description = null;
-if (is_string($rawDescription)) {
-    $description = $rawDescription;
-} elseif (is_array($rawDescription) && isset($rawDescription['value'])) {
-    $description = (string) $rawDescription['value'];
-}
+            // Description can be a string or an object with 'value' key
+            $rawDescription = $data['description'] ?? null;
+            $description = null;
+            if (is_string($rawDescription)) {
+                $description = $rawDescription;
+            } elseif (is_array($rawDescription) && isset($rawDescription['value'])) {
+                $description = (string) $rawDescription['value'];
+            }
 
-if ($description !== null) {
-    $description = $this->cleanDescription($description);
-}
+            if ($description !== null) {
+                $description = $this->cleanDescription($description);
+            }
 
             $subjects = $data['subjects'] ?? [];
 
@@ -135,36 +187,37 @@ if ($description !== null) {
             ]);
 
             return null;
-        } }
+        }
+    }
 
-        /**
+    /**
  * Clean up Open Library description markdown noise (source links, "see also" sections).
  */
-private function cleanDescription(string $text): string
-{
-    // Cut everything after a "---" separator (OL appends "see also"/edition links there)
-    $text = preg_split('/\n\s*-{3,}\s*\n/', $text)[0];
+    private function cleanDescription(string $text): string
+    {
+        // Cut everything after a "---" separator (OL appends "see also"/edition links there)
+        $text = preg_split('/\n\s*-{3,}\s*\n/', $text)[0];
 
-    // Remove parenthetical citations that wrap a markdown link, e.g. "(source)" or "([source](url))"
-    $text = preg_replace('/\(\s*\[[^\]]+\]\([^)]+\)\s*\)/', '', $text);
+        // Remove parenthetical citations that wrap a markdown link, e.g. "(source)" or "([source](url))"
+        $text = preg_replace('/\(\s*\[[^\]]+\]\([^)]+\)\s*\)/', '', $text);
 
-    // Convert any remaining markdown links [label](url) to just the label text
-    $text = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $text);
+        // Convert any remaining markdown links [label](url) to just the label text
+        $text = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $text);
 
-    // Remove leftover bare markdown reference links like [1]: http://...
-    $text = preg_replace('/^\s*\[\d+\]:\s*\S+\s*$/m', '', $text);
+        // Remove leftover bare markdown reference links like [1]: http://...
+        $text = preg_replace('/^\s*\[\d+\]:\s*\S+\s*$/m', '', $text);
 
-    // Strip markdown bold/italic markers, keep the text inside
-    $text = preg_replace('/\*\*(.+?)\*\*/', '$1', $text);
-    $text = preg_replace('/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/', '$1', $text);
+        // Strip markdown bold/italic markers, keep the text inside
+        $text = preg_replace('/\*\*(.+?)\*\*/', '$1', $text);
+        $text = preg_replace('/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/', '$1', $text);
 
-    // Collapse extra blank lines/spaces left behind by the removals above
-    $text = preg_replace('/[ \t]+/', ' ', $text);
-    $text = preg_replace('/\n{3,}/', "\n\n", $text);
+        // Collapse extra blank lines/spaces left behind by the removals above
+        $text = preg_replace('/[ \t]+/', ' ', $text);
+        $text = preg_replace('/\n{3,}/', "\n\n", $text);
 
-    return trim($text);
-}
-    
+        return trim($text);
+    }
+
 
     /**
      * Get the earliest publication date from editions.

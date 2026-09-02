@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('articles:fetch')->everyThreeHours();
+Schedule::command('books:sync-popular')->daily();

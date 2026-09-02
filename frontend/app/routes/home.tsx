@@ -26,12 +26,26 @@ async function safeFetchList(url: string): Promise<Book[]> {
   }
 }
 
+async function safeFetchPopular(url: string): Promise<Book[]> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = await res.json();
+    const entries = json.data?.popular;
+    if (!Array.isArray(entries)) return [];
+    // Each entry is { rank, week_date, book: {...} } — extract the nested book
+    return entries.map((entry: { book: Book }) => entry.book).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export async function loader() {
   const apiUrl = import.meta.env.VITE_API_URL;
 
   const [latest, bestSellers] = await Promise.all([
     safeFetchList(`${apiUrl}/books/latest`),
-    safeFetchList(`${apiUrl}/best-sellers`),
+    safeFetchPopular(`${apiUrl}/best-sellers`),
   ]);
 
   return { latest, bestSellers };
@@ -58,8 +72,7 @@ function BookCard({ book }: { book: Book }) {
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.5"
-            >
+              strokeWidth="1.5">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
@@ -69,9 +82,7 @@ function BookCard({ book }: { book: Book }) {
       <p className="mt-2 text-sm md:text-base font-medium line-clamp-2">
         {book.title}
       </p>
-      {author && (
-        <p className="text-xs text-gray-500 line-clamp-1">{author}</p>
-      )}
+      {author && <p className="text-xs text-gray-500 line-clamp-1">{author}</p>}
     </Link>
   );
 }
@@ -101,8 +112,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </section>
 
       <section>
-        <h2 className="text-xl font-bold mb-4">Best seller</h2>
-        <BookGrid books={bestSellers} />
+        <h2 className="text-xl font-bold mb-4">Più popolari</h2>
+        <BookGrid books={bestSellers.slice(0, 5)} />
       </section>
     </main>
   );

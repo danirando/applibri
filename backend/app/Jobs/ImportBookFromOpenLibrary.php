@@ -27,31 +27,40 @@ class ImportBookFromOpenLibrary implements ShouldQueue
         public array $authorNames = [],
         public ?int $coverId = null,
         public ?string $isbn = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Execute the job.
      */
     public function handle(OpenLibraryService $openLibraryService): void
     {
+        $this->importAndReturnBook($openLibraryService);
+    }
+
+    /**
+     * Import the book and return the existing model when it is already present.
+     */
+    public function importAndReturnBook(OpenLibraryService $service): ?Book
+    {
         try {
             // Check if book already exists by external_id or isbn
-            $exists = Book::where('external_id', $this->openLibraryKey)
+            $existingBook = Book::where('external_id', $this->openLibraryKey)
                 ->when($this->isbn, function ($query, $isbn) {
                     $cleaned = preg_replace('/[^0-9X]/i', '', $isbn);
                     $query->orWhere('isbn_13', $cleaned)
                         ->orWhere('isbn_10', $cleaned);
                 })
-                ->exists();
+                ->first();
 
-            if ($exists) {
-                return;
+            if ($existingBook) {
+                return $existingBook;
             }
 
             // Fetch additional details from Open Library
-            $details = $openLibraryService->getWorkDetails($this->openLibraryKey);
-            $coverUrl = $openLibraryService->getCoverUrl($this->coverId, 'L');
-            $publishedDate = $openLibraryService->getEarliestPublishDate($this->openLibraryKey);
+            $details = $service->getWorkDetails($this->openLibraryKey);
+            $coverUrl = $service->getCoverUrl($this->coverId, 'L');
+            $publishedDate = $service->getEarliestPublishDate($this->openLibraryKey);
 
             // Format ISBN
             $cleanedIsbn = $this->isbn ? preg_replace('/[^0-9X]/i', '', $this->isbn) : null;
@@ -62,7 +71,7 @@ class ImportBookFromOpenLibrary implements ShouldQueue
                 $isbn13 = $cleanedIsbn;
             }
 
-            DB::transaction(function () use ($details, $coverUrl, $publishedDate, $isbn13, $isbn10) {
+            return DB::transaction(function () use ($details, $coverUrl, $publishedDate, $isbn13, $isbn10): Book {
                 $book = Book::create([
                     'title' => $this->title,
                     'description' => $details['description'] ?? null,
@@ -135,6 +144,8 @@ class ImportBookFromOpenLibrary implements ShouldQueue
                     $genre = Genre::firstOrCreate(['name' => $genreName]);
                     $book->genres()->syncWithoutDetaching([$genre->id]);
                 }
+
+                return $book;
             });
         } catch (Throwable $e) {
             Log::error('ImportBookFromOpenLibrary failed', [
