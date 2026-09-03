@@ -4,4 +4,5 @@ export default [
   index("routes/home.tsx"),
   route("books/:id", "routes/book-detail.tsx"),
   route("search", "routes/search.tsx"),
+  route("news", "routes/news.tsx"),
 ] satisfies RouteConfig;

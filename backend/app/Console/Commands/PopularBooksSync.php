@@ -17,7 +17,7 @@ class PopularBooksSync extends Command
 
     public function handle(OpenLibraryService $openLibraryService): int
     {
-        $popularBooks = $openLibraryService->getPopularBooks(limit: 5);
+        $popularBooks = $openLibraryService->getTrendingBooks(period: 'weekly', limit: 6);
         $processed = 0;
         $bestSellersUpdated = 0;
         $weekDate = today()->toDateString();

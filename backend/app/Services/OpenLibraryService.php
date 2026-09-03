@@ -47,21 +47,7 @@ class OpenLibraryService
 
             $docs = $response->json('docs', []);
 
-            return array_map(function ($doc) {
-                $coverId = isset($doc['cover_i']) ? (int) $doc['cover_i'] : null;
-                $isbns = $doc['isbn'] ?? [];
-                $firstIsbn = is_array($isbns) && ! empty($isbns) ? (string) $isbns[0] : null;
-
-                return [
-                    'title' => $doc['title'] ?? '',
-                    'author_names' => $doc['author_name'] ?? [],
-                    'first_publish_year' => $doc['first_publish_year'] ?? null,
-                    'cover_id' => $coverId,
-                    'cover_url' => $this->getCoverUrl($coverId),
-                    'open_library_key' => $doc['key'] ?? null,
-                    'isbn' => $firstIsbn,
-                ];
-            }, $docs);
+            return array_map(fn (array $doc): array => $this->mapSearchDoc($doc), $docs);
         } catch (Throwable $e) {
             Log::warning('OpenLibrary search exception', [
                 'query' => $query,
@@ -73,7 +59,82 @@ class OpenLibraryService
     }
 
     /**
-     * Get popular books for an Open Library subject.
+     * Search a book on Open Library by ISBN.
+     *
+     * @return array{
+     *     title: string,
+     *     author_names: array<string>,
+     *     first_publish_year: int|null,
+     *     cover_id: int|null,
+     *     cover_url: string|null,
+     *     open_library_key: string|null,
+     *     isbn: string|null
+     * }|null
+     */
+    public function searchByIsbn(string $isbn): ?array
+    {
+        try {
+            $response = Http::timeout(5)->get("{$this->baseUrl}/search.json", [
+                'isbn' => $isbn,
+                'limit' => 1,
+            ]);
+
+            if ($response->failed()) {
+                Log::warning('OpenLibrary ISBN search request failed', [
+                    'isbn' => $isbn,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            $doc = $response->json('docs.0');
+
+            return is_array($doc) ? $this->mapSearchDoc($doc) : null;
+        } catch (Throwable $e) {
+            Log::warning('OpenLibrary ISBN search exception', [
+                'isbn' => $isbn,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Map an Open Library search document to the application's book shape.
+     *
+     * @param  array<string, mixed>  $doc
+     * @return array{
+     *     title: string,
+     *     author_names: array<string>,
+     *     first_publish_year: int|null,
+     *     cover_id: int|null,
+     *     cover_url: string|null,
+     *     open_library_key: string|null,
+     *     isbn: string|null
+     * }
+     */
+    private function mapSearchDoc(array $doc): array
+    {
+        $coverId = isset($doc['cover_i']) ? (int) $doc['cover_i'] : null;
+        $isbns = $doc['isbn'] ?? [];
+        $firstIsbn = is_array($isbns) && ! empty($isbns) ? (string) $isbns[0] : null;
+
+        return [
+            'title' => $doc['title'] ?? '',
+            'author_names' => $doc['author_name'] ?? [],
+            'first_publish_year' => $doc['first_publish_year'] ?? null,
+            'cover_id' => $coverId,
+            'cover_url' => $this->getCoverUrl($coverId),
+            'open_library_key' => $doc['key'] ?? null,
+            'isbn' => $firstIsbn,
+        ];
+    }
+
+    /**
+     * Get trending books from Open Library.
      *
      * @return array<int, array{
      *     title: string,
@@ -83,17 +144,14 @@ class OpenLibraryService
      *     first_publish_year: int|null
      * }>
      */
-    public function getPopularBooks(string $subject = 'fiction', int $limit = 20): array
+    public function getTrendingBooks(string $period = 'weekly', int $limit = 5): array
     {
         try {
-            $response = Http::timeout(8)->get("{$this->baseUrl}/subjects/{$subject}.json", [
-                'sort' => 'rating',
-                'limit' => $limit,
-            ]);
+            $response = Http::timeout(8)->get("{$this->baseUrl}/trending/{$period}.json");
 
             if ($response->failed()) {
-                Log::warning('OpenLibrary popular books request failed', [
-                    'subject' => $subject,
+                Log::warning('OpenLibrary trending books request failed', [
+                    'period' => $period,
                     'limit' => $limit,
                     'status' => $response->status(),
                 ]);
@@ -101,21 +159,20 @@ class OpenLibraryService
                 return [];
             }
 
+            $works = array_slice($response->json('works', []), 0, $limit);
+
             return array_map(function (array $work): array {
                 return [
                     'title' => $work['title'] ?? '',
-                    'author_names' => array_values(array_filter(array_map(
-                        fn (array $author): ?string => isset($author['name']) ? (string) $author['name'] : null,
-                        is_array($work['authors'] ?? null) ? $work['authors'] : []
-                    ))),
-                    'cover_id' => isset($work['cover_id']) ? (int) $work['cover_id'] : null,
+                    'author_names' => is_array($work['author_name'] ?? null) ? $work['author_name'] : [],
+                    'cover_id' => isset($work['cover_i']) ? (int) $work['cover_i'] : null,
                     'open_library_key' => $work['key'] ?? null,
                     'first_publish_year' => isset($work['first_publish_year']) ? (int) $work['first_publish_year'] : null,
                 ];
-            }, $response->json('works', []));
+            }, $works);
         } catch (Throwable $e) {
-            Log::warning('OpenLibrary popular books exception', [
-                'subject' => $subject,
+            Log::warning('OpenLibrary trending books exception', [
+                'period' => $period,
                 'limit' => $limit,
                 'error' => $e->getMessage(),
             ]);

@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('articles:fetch')->everyThreeHours();
 Schedule::command('books:sync-popular')->daily();
+Schedule::command('books:sync-newest')->daily();

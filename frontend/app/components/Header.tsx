@@ -26,11 +26,16 @@ export function Header() {
           applibri
         </a>
 
+        <a
+          href="/news"
+          className="hidden md:inline text-sm text-gray-600 hover:text-gray-900 shrink-0">
+          News
+        </a>
+
         {/* Search bar: always visible from sm: up */}
         <form
           onSubmit={handleSubmit}
-          className="hidden sm:flex flex-1 max-w-md"
-        >
+          className="hidden sm:flex flex-1 max-w-md">
           <input
             type="text"
             name="q"
@@ -40,8 +45,7 @@ export function Header() {
           <button
             type="submit"
             disabled={isSearching}
-            className="bg-gray-800 text-white rounded-r-full px-4 text-sm disabled:opacity-60 flex items-center justify-center min-w-[60px]"
-          >
+            className="bg-gray-800 text-white rounded-r-full px-4 text-sm disabled:opacity-60 flex items-center justify-center min-w-[60px]">
             {isSearching ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
@@ -55,8 +59,7 @@ export function Header() {
           type="button"
           onClick={() => setShowSearch((v) => !v)}
           className="sm:hidden p-2"
-          aria-label="Cerca"
-        >
+          aria-label="Cerca">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -64,8 +67,7 @@ export function Header() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
-          >
+            strokeWidth="2">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
@@ -85,8 +87,7 @@ export function Header() {
           <button
             type="submit"
             disabled={isSearching}
-            className="bg-gray-800 text-white rounded-r-full px-4 text-sm disabled:opacity-60 flex items-center justify-center min-w-[60px]"
-          >
+            className="bg-gray-800 text-white rounded-r-full px-4 text-sm disabled:opacity-60 flex items-center justify-center min-w-[60px]">
             {isSearching ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (

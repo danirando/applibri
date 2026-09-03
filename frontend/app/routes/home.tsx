@@ -107,13 +107,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <main className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
       <section className="mb-10">
-        <h2 className="text-xl font-bold mb-4">Ultime uscite</h2>
+        <h2 className="text-xl font-bold mb-4">I più venduti del momento</h2>
         <BookGrid books={latest} />
       </section>
 
       <section>
-        <h2 className="text-xl font-bold mb-4">Più popolari</h2>
-        <BookGrid books={bestSellers.slice(0, 5)} />
+        <h2 className="text-xl font-bold mb-4">Letture del momento</h2>
+        <BookGrid books={bestSellers.slice(0, 6)} />
       </section>
     </main>
   );
