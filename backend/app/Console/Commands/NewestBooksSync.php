@@ -32,30 +32,59 @@ class NewestBooksSync extends Command
             $processed++;
             $isbn13 = $review['isbn13'];
 
-            if (Book::where('isbn_13', $isbn13)->exists()) {
-                continue;
+            $book = Book::where('isbn_13', $isbn13)->first();
+
+            if (! $book) {
+                $matchingResult = $openLibraryService->searchByIsbn($isbn13);
+
+                if ($matchingResult === null) {
+                    $fallbackResults = $openLibraryService->search(
+                        $review['title'].' '.$review['author']
+                    );
+                    $normalizedTitle = $this->normalizeTitle($review['title']);
+                    $discardedTitles = [];
+
+                    foreach ($fallbackResults as $fallbackResult) {
+                        $fallbackTitle = $fallbackResult['title'] ?? '';
+                        $discardedTitles[] = $fallbackTitle;
+
+                        if ($this->normalizeTitle($fallbackTitle) === $normalizedTitle) {
+                            $matchingResult = $fallbackResult;
+                            break;
+                        }
+                    }
+
+                    if ($matchingResult === null) {
+                        Log::info('Book not found on Open Library (no exact title match)', [
+                            'title' => $review['title'],
+                            'author' => $review['author'],
+                            'discarded_titles' => $discardedTitles,
+                        ]);
+
+                        continue;
+                    }
+                }
+
+                $openLibraryKey = $matchingResult['open_library_key'] ?? null;
+
+                if (! $openLibraryKey) {
+                    Log::info('Book not found on Open Library', [
+                        'title' => $review['title'],
+                        'author' => $review['author'],
+                        'isbn13' => $isbn13,
+                    ]);
+
+                    continue;
+                }
+
+                $book = (new ImportBookFromOpenLibrary(
+                    openLibraryKey: $openLibraryKey,
+                    title: $matchingResult['title'] ?: $review['title'],
+                    authorNames: $matchingResult['author_names'] ?: [$review['author']],
+                    coverId: $matchingResult['cover_id'],
+                    isbn: $isbn13,
+                ))->importAndReturnBook($openLibraryService);
             }
-
-            $matchingResult = $openLibraryService->searchByIsbn($isbn13);
-            $openLibraryKey = $matchingResult['open_library_key'] ?? null;
-
-            if (! $openLibraryKey) {
-                Log::info('Book not found on Open Library by ISBN', [
-                    'title' => $review['title'],
-                    'author' => $review['author'],
-                    'isbn13' => $isbn13,
-                ]);
-
-                continue;
-            }
-
-            $book = (new ImportBookFromOpenLibrary(
-                openLibraryKey: $openLibraryKey,
-                title: $matchingResult['title'] ?: $review['title'],
-                authorNames: $matchingResult['author_names'] ?: [$review['author']],
-                coverId: $matchingResult['cover_id'],
-                isbn: $isbn13,
-            ))->importAndReturnBook($openLibraryService);
 
             if ($book) {
                 $imported++;
@@ -74,6 +103,14 @@ class NewestBooksSync extends Command
         $this->info("Processati {$processed} libri; {$imported} importati con successo.");
 
         return SymfonyCommand::SUCCESS;
+    }
+
+    private function normalizeTitle(string $title): string
+    {
+        $normalized = mb_strtolower($title);
+        $normalized = preg_replace('/[^\p{L}\p{N}\s]/u', '', $normalized);
+
+        return trim($normalized ?? '');
     }
 
 }

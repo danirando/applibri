@@ -26,14 +26,16 @@ async function safeFetchList(url: string): Promise<Book[]> {
   }
 }
 
-async function safeFetchPopular(url: string): Promise<Book[]> {
+async function safeFetchByListName(
+  url: string,
+  listName: string,
+): Promise<Book[]> {
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
     const json = await res.json();
-    const entries = json.data?.popular;
+    const entries = json.data?.[listName];
     if (!Array.isArray(entries)) return [];
-    // Each entry is { rank, week_date, book: {...} } — extract the nested book
     return entries.map((entry: { book: Book }) => entry.book).filter(Boolean);
   } catch {
     return [];
@@ -43,12 +45,12 @@ async function safeFetchPopular(url: string): Promise<Book[]> {
 export async function loader() {
   const apiUrl = import.meta.env.VITE_API_URL;
 
-  const [latest, bestSellers] = await Promise.all([
-    safeFetchList(`${apiUrl}/books/latest`),
-    safeFetchPopular(`${apiUrl}/best-sellers`),
+  const [trending, bestSellers] = await Promise.all([
+    safeFetchByListName(`${apiUrl}/best-sellers`, "popular"),
+    safeFetchByListName(`${apiUrl}/best-sellers`, "nyt"),
   ]);
 
-  return { latest, bestSellers };
+  return { trending, bestSellers };
 }
 
 function BookCard({ book }: { book: Book }) {
@@ -102,18 +104,18 @@ function BookGrid({ books }: { books: Book[] }) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { latest, bestSellers } = loaderData;
+  const { trending, bestSellers } = loaderData;
 
   return (
     <main className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
       <section className="mb-10">
         <h2 className="text-xl font-bold mb-4">I più venduti del momento</h2>
-        <BookGrid books={latest} />
+        <BookGrid books={bestSellers} />
       </section>
 
       <section>
         <h2 className="text-xl font-bold mb-4">Letture del momento</h2>
-        <BookGrid books={bestSellers.slice(0, 6)} />
+        <BookGrid books={trending} />
       </section>
     </main>
   );

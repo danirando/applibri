@@ -13,9 +13,12 @@ class BestSellerController extends Controller
      */
     public function index(): JsonResponse
     {
-        $latestWeekDate = BestSeller::max('week_date');
+        $latestWeekDates = BestSeller::query()
+            ->selectRaw('list_name, MAX(week_date) as week_date')
+            ->groupBy('list_name')
+            ->pluck('week_date', 'list_name');
 
-        if (! $latestWeekDate) {
+        if ($latestWeekDates->isEmpty()) {
             return response()->json([
                 'week_date' => null,
                 'data' => (object) [],
@@ -23,7 +26,9 @@ class BestSellerController extends Controller
         }
 
         $bestSellers = BestSeller::with(['book.authors', 'book.genres'])
-            ->where('week_date', $latestWeekDate)
+            ->whereRaw(
+                'week_date = (SELECT MAX(bs_latest.week_date) FROM best_sellers AS bs_latest WHERE bs_latest.list_name = best_sellers.list_name)'
+            )
             ->orderBy('rank', 'asc')
             ->get();
 
@@ -32,7 +37,7 @@ class BestSellerController extends Controller
         });
 
         return response()->json([
-            'week_date' => $latestWeekDate,
+            'week_date' => $latestWeekDates,
             'data' => $grouped,
         ]);
     }
