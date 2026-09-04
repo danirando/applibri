@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router";
 import type { Route } from "./+types/news";
 
 interface Article {
@@ -15,16 +16,18 @@ export function meta() {
   return [{ title: "News - applibri" }];
 }
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
   const apiUrl = import.meta.env.VITE_API_URL;
+  const url = new URL(request.url);
+  const lang = url.searchParams.get("lang") === "en" ? "en" : "it";
 
   try {
-    const res = await fetch(`${apiUrl}/articles`);
-    if (!res.ok) return { articles: [] };
+    const res = await fetch(`${apiUrl}/articles?lang=${lang}`);
+    if (!res.ok) return { articles: [], lang };
     const json = await res.json();
-    return { articles: Array.isArray(json.data) ? json.data : [] };
+    return { articles: Array.isArray(json.data) ? json.data : [], lang };
   } catch {
-    return { articles: [] };
+    return { articles: [], lang };
   }
 }
 
@@ -52,9 +55,7 @@ function ArticleCard({ article }: { article: Article }) {
       )}
       <div className="p-4">
         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-          <span className="uppercase font-medium">
-            {article.language === "it" ? "🇮🇹" : "🇬🇧"} {article.source_name}
-          </span>
+          <span className="uppercase font-medium">{article.source_name}</span>
           <span>&middot;</span>
           <span>{date}</span>
         </div>
@@ -74,13 +75,37 @@ function ArticleCard({ article }: { article: Article }) {
 export default function NewsPage({
   loaderData,
 }: {
-  loaderData: { articles: Article[] };
+  loaderData: { articles: Article[]; lang: string };
 }) {
-  const { articles } = loaderData;
+  const { articles, lang } = loaderData;
+  const [, setSearchParams] = useSearchParams();
 
   return (
     <main className="px-4 md:px-8 py-6 max-w-5xl mx-auto">
-      <h1 className="text-xl font-bold mb-6">News</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-bold">News</h1>
+
+        <div className="inline-flex rounded-full border border-gray-300 overflow-hidden text-sm">
+          <button
+            onClick={() => setSearchParams({ lang: "it" })}
+            className={`px-4 py-1.5 ${
+              lang === "it"
+                ? "bg-gray-800 text-white"
+                : "bg-white text-gray-700"
+            }`}>
+            🇮🇹 IT
+          </button>
+          <button
+            onClick={() => setSearchParams({ lang: "en" })}
+            className={`px-4 py-1.5 ${
+              lang === "en"
+                ? "bg-gray-800 text-white"
+                : "bg-white text-gray-700"
+            }`}>
+            🇬🇧 EN
+          </button>
+        </div>
+      </div>
 
       {articles.length === 0 && (
         <p className="text-sm text-gray-500">Nessun articolo disponibile.</p>
